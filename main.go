@@ -50,6 +50,10 @@ func reSubMatchMap(r *regexp.Regexp, str string) map[string]string {
 	return subMatchMap
 }
 
+func myFunc2() {
+	return 1
+}
+
 func myFunc() {
 	return 1
 }
