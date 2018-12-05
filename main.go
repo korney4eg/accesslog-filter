@@ -54,10 +54,6 @@ func myFunc2() {
 	return 1
 }
 
-func myFunc() {
-	return 1
-}
-
 func sortByPopularity(metric map[string]int) {
 	n := map[int][]string{}
 	var a []int
