@@ -50,6 +50,10 @@ func reSubMatchMap(r *regexp.Regexp, str string) map[string]string {
 	return subMatchMap
 }
 
+func myFunc() {
+	return 1
+}
+
 func sortByPopularity(metric map[string]int) {
 	n := map[int][]string{}
 	var a []int
