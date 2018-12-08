@@ -130,7 +130,7 @@ func main() {
 
 	}
 	for line := range logLines {
-		match, _ := regexp.MatchString(`GET (.+\.html|\/) HTTP\/1\.[1]`, logLines[line].request)
+		match, _ := regexp.MatchString(`GET .+\.html HTTP\/1\.[1]`, logLines[line].request)
 		if match != true {
 			continue
 		}
