@@ -2,11 +2,13 @@ package main
 
 import (
 	"bufio"
+	"flag"
+	// "errors"
 	"fmt"
 	"os"
 	"regexp"
 	"sort"
-	// "time"
+	"time"
 )
 
 type LogLine struct {
@@ -50,10 +52,6 @@ func reSubMatchMap(r *regexp.Regexp, str string) map[string]string {
 	return subMatchMap
 }
 
-func myFunc2() {
-	return 1
-}
-
 func sortByPopularity(metric map[string]int) {
 	n := map[int][]string{}
 	var a []int
@@ -72,6 +70,24 @@ func sortByPopularity(metric map[string]int) {
 
 }
 
+func dateIsInInterval(line string, period string) bool {
+	now := time.Now()
+	var startDate time.Time
+	switch period {
+	case "week":
+		duration, _ := time.ParseDuration("168h")
+		startDate = now.Add(-duration)
+
+	case "month":
+		startDate = now.AddDate(0, -1, 0)
+	default:
+		return false
+	}
+	t, _ := time.Parse("02/Jan/2006:15:04:05 -0700", line)
+	return startDate.Before(t)
+
+}
+
 func LogLineString(logLine LogLine) string {
 	return fmt.Sprintf(`%s - - [%s] "%s" %s %s "%s" "%s"`, logLine.remote_addr, logLine.time_local, logLine.request, logLine.status, logLine.body_bytes_sent, logLine.http_referer, logLine.http_user_agent)
 }
@@ -81,6 +97,14 @@ func LogLineString(logLine LogLine) string {
 // }
 
 func main() {
+
+	period := flag.String("period", "week", "Period before current date to get logs. Ex: week|month")
+	flag.Parse()
+	if (*period != "week") && (*period != "month") {
+		fmt.Printf("Wrong period value. Should be 'week' or 'moth', got '%s'\n", *period)
+		os.Exit(1)
+
+	}
 
 	i := 0
 
@@ -106,7 +130,7 @@ func main() {
 
 	}
 	for line := range logLines {
-		match, _ := regexp.MatchString(`GET .+\.html HTTP\/1\.1`, logLines[line].request)
+		match, _ := regexp.MatchString(`GET (.+\.html|\/) HTTP\/1\.[1]`, logLines[line].request)
 		if match != true {
 			continue
 		}
@@ -114,12 +138,9 @@ func main() {
 		if match == true {
 			continue
 		}
-		// t, _ := time.Parse("02/Jan/2006:15:04:05 -0700", logLines[line].time_local)
-		// now := time.Now()
-		// if now.Sub(t) > time.Hour*24*7 {
-		// 	continue
-
-		// }
+		if !dateIsInInterval(logLines[line].time_local, *period) {
+			continue
+		}
 
 		userAgents[logLines[line].http_user_agent] += 1
 		referers[logLines[line].http_referer] += 1
