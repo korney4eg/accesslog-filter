@@ -32,7 +32,7 @@ func ConvertLogLineToMap(logLine string) map[string]string {
 }
 
 func matchAllRequirements(parsedLine map[string]string, period string) bool {
-	request := regexp.MustCompile(`GET (.+\.html|\/\d*\/\d*\/\d*\/.*\/)(\?.*)? HTTP\/1\.[10]`)
+	request := regexp.MustCompile(`GET (.+\.html|\/\d*\/\d*\/\d*\/.*\/|\/\?.*)(\?.*)? HTTP\/1\.[10]`)
 	http_user_agent := regexp.MustCompile(`.*([Bb]ot|vkShare|Google-AMPHTML|feedly|[cC]rawler|[Pp]arser|curl|-|Disqus).*`)
 	switch {
 	case parsedLine["status"] != "200":
@@ -92,6 +92,8 @@ func dateIsInInterval(line string, period string) bool {
 
 	case "month":
 		startDate = now.AddDate(0, -1, 0)
+	case "any":
+		return true
 	default:
 		return false
 	}
