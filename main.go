@@ -3,14 +3,29 @@ package main
 import (
 	"bufio"
 	// "errors"
-	"flag"
+	// "flag"
+	// "encoding/json"
 	"fmt"
 	"os"
+	"path"
 	"regexp"
 	"sort"
 	"strings"
 	"time"
+
+	flags "github.com/jessevdk/go-flags"
 )
+
+// type parsedLogLine map[string]string
+// type logLineMapped map[int]parsedLogLine
+// type logLineDoubleMapped map[int]logLineMapped
+
+type opts struct {
+	Period        string `short:"p" long:"period" required:"true" choice:"any" choice:"day" choice:"month"`
+	OutputDest    string `short:"o" long:"output-file-path"env:"OUTPUT_PATH" description:"path to save file(s). If not set output to stdout"`
+	DivideByMonth bool   `short:"m" long:"divide-by-month" description:"Divide by month. Create file for each month. Example filename: ./08.reqs"`
+	DivideByYear  bool   `short:"y" long:"divide-by-year" description:"Divide by year. Create folder for each year"`
+}
 
 func ConvertLogLineToMap(logLine string) map[string]string {
 	regexPattern := `(?P<remote_addr>\d+\.\d+\.\d+\.\d+) - -` +
@@ -32,7 +47,7 @@ func ConvertLogLineToMap(logLine string) map[string]string {
 }
 
 func matchAllRequirements(parsedLine map[string]string, period string) bool {
-	request := regexp.MustCompile(`GET (.+\.html|\/\d*\/\d*\/\d*\/.*\/|\/\?.*)(\?.*)? HTTP\/1\.[10]`)
+	request := regexp.MustCompile(`GET (.+\.html|\/\d*\/\d*\/\d*\/.*\/) HTTP\/1\.[10]`)
 	http_user_agent := regexp.MustCompile(`.*([Bb]ot|vkShare|Google-AMPHTML|feedly|[cC]rawler|[Pp]arser|curl|-|Disqus).*`)
 	switch {
 	case parsedLine["status"] != "200":
@@ -101,63 +116,77 @@ func dateIsInInterval(line string, period string) bool {
 	return startDate.Before(t)
 }
 
+func getOutputFilePath(outputDest string, date string, divideByMonth bool, divideByYear bool) (string, error) {
+	outputPath := outputDest
+	t, err := time.Parse("02/Jan/2006:15:04:05 -0700", date)
+	if err != nil {
+		return "", err
+	}
+	if !divideByMonth && !divideByYear {
+		outputPath += "outputs"
+	}
+	if divideByYear {
+		outputPath += fmt.Sprintf("/%d", t.Year())
+	}
+	if divideByMonth {
+		outputPath += fmt.Sprintf("/%d", t.Month())
+	}
+	outputPath += ".reqs"
+	return outputPath, nil
+}
+
 func main() {
 
-	period := flag.String("period", "week", "Period before current date to get logs. Ex: week|month")
-	flag.Parse()
-	if (*period != "week") && (*period != "month") {
-		fmt.Printf("Wrong period value. Should be 'week' or 'moth', got '%s'\n", *period)
+	o := opts{}
+	if _, err := flags.Parse(&o); err != nil {
+		fmt.Println(err)
 		os.Exit(1)
-
 	}
 
-	// i := 0
+	fmt.Fprintf(os.Stderr, "Period=%v\n", o.Period)
+	fmt.Fprintf(os.Stderr, "OutputDest=%v\n", o.OutputDest)
+	fmt.Fprintf(os.Stderr, "DivideByMonth=%v\n", o.DivideByMonth)
+	fmt.Fprintf(os.Stderr, "DivideByYear=%v\n", o.DivideByYear)
 
 	scanner := bufio.NewScanner(os.Stdin)
-	// userAgents := make(map[string]int)
-	// referers := make(map[string]int)
-	// requests := make(map[string]int)
-	// statuses := make(map[string]int)
-	// logLines := make([]LogLine, 10000)
 
 	for scanner.Scan() {
-		// `Text` returns the current token, here the next line,
-		// from the input.
-
-		// fmt.Println(scanner.Text())
-		// fmt.Println(scanner.Text())
 		parsedLine := ConvertLogLineToMap(scanner.Text())
-		// i += 1
-		// Write out the uppercased line.
-		// logLines = append(logLines, parsedLine)
-		// if i > 40 {
-		// 	break
-		// }
 
-		// }
-		// for line := range logLines {
-
-		if matchAllRequirements(parsedLine, *period) == false {
+		if matchAllRequirements(parsedLine, o.Period) == false {
 			continue
 		}
 		parsedLine["remote_addr"] = AnonymizeIp(parsedLine["remote_addr"])
-		fmt.Println(ConvertMapToLogLine(parsedLine))
-		// userAgents[parsedLine["http_user_agent"]] += 1
-		// referers[parsedLine["http_referer"]] += 1
-		// 	requests[logLines[line].request] += 1
-		// 	statuses[logLines[line].status] += 1
-		// 	fmt.Println(LogLineString(logLines[line]))
-	}
-	// sortByPopularity(referers)
+		if o.OutputDest == "" {
+			fmt.Println(ConvertMapToLogLine(parsedLine))
+		} else {
+			filePath, err := getOutputFilePath(o.OutputDest, parsedLine["time_local"], o.DivideByMonth, o.DivideByYear)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "error:", err)
+				os.Exit(1)
+			}
+			folder := path.Dir(filePath)
+			err = os.MkdirAll(folder, 0755)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "error:", err)
+				os.Exit(1)
+			}
+			f, err := os.OpenFile(filePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+			if err != nil {
+				panic(err)
+			}
 
-	// // Check for errors during `Scan`. End of file is
-	// // expected and not reported by `Scan` as an error.
+			defer f.Close()
+
+			if _, err = f.WriteString(fmt.Sprintf("%v\n", parsedLine)); err != nil {
+				panic(err)
+			}
+
+		}
+	}
 	if err := scanner.Err(); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}
-	// logLine := `52.87.65.11 - - [02/Nov/2018:06:55:13 +0000] "GET /feed.xml HTTP/1.1" 200 9810 "-" "curl"`
-	// parsedLine := ConvertLogLineToMap(logLine)
-	// fmt.Println(parsedLine)
 
 }
